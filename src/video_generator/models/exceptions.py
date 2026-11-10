@@ -29,3 +29,7 @@ class AIServiceError(VideoGenerationError):
 class ConfigurationError(VideoGenerationError):
     """Error in configuration."""
     pass
+
+class PipelineError(VideoGenerationError):
+    """Error during pipeline execution."""
+    pass
