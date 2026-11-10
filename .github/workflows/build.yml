@@ -54,11 +54,13 @@ jobs:
             "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
           )
           $success = $false
+          $minSize = 50 * 1024 * 1024  # 50 MB in bytes
+
           foreach ($url in $urls) {
             try {
               Write-Host "Trying: $url"
               Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -UseBasicParsing
-              if (Test-Path ffmpeg.zip -and (Get-Item ffmpeg.zip).Length -gt 50MB) {
+              if ((Test-Path ffmpeg.zip) -and ((Get-Item ffmpeg.zip).Length -gt $minSize)) {
                 Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_build -Force
                 $exe = Get-ChildItem ffmpeg_build -Recurse -Filter ffmpeg.exe | Select-Object -First 1
                 if ($exe) {
@@ -87,7 +89,7 @@ jobs:
         run: |
           if (Test-Path .\dist\VideoGenerator.exe) {
             $sizeMB = (Get-Item .\dist\VideoGenerator.exe).Length / 1MB
-            Write-Host "✅ Executable built successfully, size: $sizeMB MB"
+            Write-Host "✅ Executable built successfully, size: $([math]::Round($sizeMB, 2)) MB"
           } else {
             throw "❌ Executable not found"
           }
