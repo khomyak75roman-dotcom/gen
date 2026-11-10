@@ -1,20 +1,36 @@
 """
-Main entry point for Video Generator.
+Main entry point for Video Generator v4.0.
 
 Can be run as:
 - python -m video_generator (GUI mode)
 - python -m video_generator --console (Console mode)
+- Directly as compiled executable (VideoGenerator.exe)
 """
 
 import argparse
 import asyncio
+import os
 import sys
 from pathlib import Path
 
-from .config import settings
-from .core import VideoGenerator
-from .models import VideoConfig, GenerationMode
-from .utils import get_logger, setup_logging
+# Fix for PyInstaller onefile mode
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Running as compiled executable
+    os.environ['PYTHONPATH'] = sys._MEIPASS
+    APP_DIR = Path(sys._MEIPASS)
+else:
+    # Running as script
+    APP_DIR = Path(__file__).parent.parent
+
+# Add src to path for development
+if not getattr(sys, 'frozen', False):
+    sys.path.insert(0, str(APP_DIR))
+
+# Now import modules
+from video_generator.config import settings
+from video_generator.core import VideoGenerator
+from video_generator.models import VideoConfig, GenerationMode
+from video_generator.utils import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -88,7 +104,7 @@ def console_mode():
         print()
         print("=" * 60)
         print(f"✅ Video generated successfully!")
-        print(f"📂 Location: {final_path}")
+        print(f"📁 Location: {final_path}")
         print("=" * 60)
 
     except Exception as e:
@@ -106,7 +122,11 @@ def gui_mode():
         print("Install with: pip install customtkinter")
         sys.exit(1)
 
-    from .gui.app import VideoGeneratorApp
+    from video_generator.gui.app import VideoGeneratorApp
+
+    # Fix working directory for PyInstaller
+    if getattr(sys, 'frozen', False):
+        os.chdir(sys._MEIPASS)
 
     app = VideoGeneratorApp()
     app.run()
