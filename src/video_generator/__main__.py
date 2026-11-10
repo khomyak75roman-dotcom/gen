@@ -13,24 +13,34 @@ import os
 import sys
 from pathlib import Path
 
-# Fix for PyInstaller onefile mode
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    # Running as compiled executable
-    os.environ['PYTHONPATH'] = sys._MEIPASS
-    APP_DIR = Path(sys._MEIPASS)
-else:
-    # Running as script
-    APP_DIR = Path(__file__).parent.parent
+# =============================================================================
+# FIX FOR DIRECT EXECUTION AND PYINSTALLER
+# =============================================================================
 
-# Add src to path for development
+# Get the absolute path to the script
+SCRIPT_DIR = Path(__file__).parent.parent if not getattr(sys, 'frozen', False) else Path(sys._MEIPASS)
+
+# Add the parent directory to Python path for direct execution
 if not getattr(sys, 'frozen', False):
-    sys.path.insert(0, str(APP_DIR))
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-# Now import modules
-from video_generator.config import settings
-from video_generator.core import VideoGenerator
-from video_generator.models import VideoConfig, GenerationMode
-from video_generator.utils import get_logger, setup_logging
+# Now we can import using absolute paths that work in both modes
+try:
+    # Try package imports first (for python -m video_generator)
+    from video_generator.config import settings
+    from video_generator.core import VideoGenerator
+    from video_generator.models import VideoConfig, GenerationMode
+    from video_generator.utils import get_logger, setup_logging
+    from video_generator.gui.app import VideoGeneratorApp
+    PACKAGE_MODE = True
+except ImportError:
+    # Fall back to direct imports (for compiled .exe or direct script execution)
+    from config import settings
+    from core import VideoGenerator
+    from models import VideoConfig, GenerationMode
+    from utils import get_logger, setup_logging
+    from gui.app import VideoGeneratorApp
+    PACKAGE_MODE = False
 
 logger = get_logger(__name__)
 
@@ -84,11 +94,13 @@ def console_mode():
     def progress_callback(msg):
         print(msg)
 
-    generator.on_progress(progress_callback)
+    if hasattr(generator, 'on_progress'):
+        generator.on_progress(progress_callback)
 
     # Ensure ffmpeg
     try:
-        generator.ensure_ffmpeg()
+        if hasattr(generator, 'ensure_ffmpeg'):
+            generator.ensure_ffmpeg()
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -121,8 +133,6 @@ def gui_mode():
         print("Error: customtkinter is required for GUI mode")
         print("Install with: pip install customtkinter")
         sys.exit(1)
-
-    from video_generator.gui.app import VideoGeneratorApp
 
     # Fix working directory for PyInstaller
     if getattr(sys, 'frozen', False):
