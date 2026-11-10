@@ -12,7 +12,6 @@ concurrency:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
   build:
@@ -28,12 +27,14 @@ jobs:
 
       - name: Extract version
         id: version
+        shell: pwsh
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=4.0.0-dev" >> $GITHUB_OUTPUT
-          fi
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref }}".Substring("${{ github.ref }}".LastIndexOf('/') + 1)
+            Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Output "version=4.0.0-dev" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -76,31 +77,31 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name VideoGenerator \
-            --collect-all customtkinter \
-            --collect-data cv2 \
-            --icon=icon.ico \
-            --version-file=version.txt \
+          pyinstaller --onefile --windowed --name VideoGenerator ^
+            --collect-all customtkinter ^
+            --collect-data cv2 ^
             src/video_generator/__main__.py
 
       - name: Test executable
         shell: pwsh
         run: |
           if (Test-Path .\dist\VideoGenerator.exe) {
-            Write-Host "Executable exists, size: $((Get-Item .\dist\VideoGenerator.exe).Length / 1MB) MB"
+            $sizeMB = (Get-Item .\dist\VideoGenerator.exe).Length / 1MB
+            Write-Host "✅ Executable built successfully, size: $sizeMB MB"
           } else {
-            throw "Executable not found"
+            throw "❌ Executable not found"
           }
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Prepare installer.iss
+      - name: Update installer version
         shell: pwsh
         run: |
+          $version = "${{ steps.version.outputs.version }}"
           $content = Get-Content installer.iss -Raw
-          $content = $content -replace '\{app\}', 'C:\Program Files\VideoGenerator'
-          $content = $content -replace '4\.0\.0', '${{ steps.version.outputs.version }}'
+          $content = $content -replace 'AppVersion=4\.0\.0', "AppVersion=$version"
+          $content = $content -replace 'OutputBaseFilename=VideoGenerator-Setup', "OutputBaseFilename=VideoGenerator-Setup-$version"
           $content | Out-File -Encoding UTF8 -FilePath installer.iss
 
       - name: Build installer
@@ -118,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VideoGenerator-Setup
-          path: dist/VideoGenerator-Setup.exe
+          path: dist/VideoGenerator-Setup-*.exe
           compression-level: 0
 
   release:
@@ -131,11 +132,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/VideoGenerator-exe/VideoGenerator.exe
-            artifacts/VideoGenerator-Setup/VideoGenerator-Setup.exe
+            artifacts/VideoGenerator.exe
+            artifacts/VideoGenerator-Setup-*.exe
           generate_release_notes: true
+          tag_name: ${{ github.ref_name }}
