@@ -1,30 +1,59 @@
+"""
+Video generation pipeline module.
+
+Handles the complete video generation workflow including:
+- State management
+- Progress tracking
+- Resume functionality
+"""
+
 import asyncio
 import json
 import logging
 import os
-from dataclasses import asdict, field
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 from video_generator.config import settings
 from video_generator.models.base import GenerationMode, ProjectState, Scene, VideoConfig
-from video_generator.models.exceptions import PipelineError
+from video_generator.models.exceptions import VideoGenerationError
 from video_generator.utils.file_utils import ensure_directory, write_json
 from video_generator.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 class VideoPipeline:
-    def __init__(self):
+    """
+    Manages the video generation pipeline state and progress.
+
+    Attributes:
+        state: Current project state
+        output_dir: Output directory for generated files
+    """
+
+    def __init__(self) -> None:
+        """Initialize the pipeline with empty state."""
         self.state: Optional[ProjectState] = None
         self.output_dir: Optional[Path] = None
         self._progress_callbacks: list[Callable[[float, str], None]] = []
 
     def add_progress_callback(self, callback: Callable[[float, str], None]) -> None:
+        """Add a progress callback function.
+
+        Args:
+            callback: Function to call with (progress, message) updates
+        """
         self._progress_callbacks.append(callback)
 
     def _notify_progress(self, progress: float, message: str) -> None:
+        """Notify all registered callbacks of progress.
+
+        Args:
+            progress: Progress percentage (0-100)
+            message: Status message
+        """
         for cb in self._progress_callbacks:
             try:
                 cb(progress, message)
@@ -32,11 +61,20 @@ class VideoPipeline:
                 logger.warning(f"Progress callback failed: {e}")
 
     def _get_state_path(self) -> Path:
+        """Get the path to the state file.
+
+        Returns:
+            Path to project.json
+
+        Raises:
+            VideoGenerationError: If output directory is not set
+        """
         if self.output_dir is None:
-            raise PipelineError("Output directory not set")
+            raise VideoGenerationError("Output directory not set")
         return self.output_dir / "project.json"
 
     def save_state(self) -> None:
+        """Save the current state to disk."""
         if self.state is None or self.output_dir is None:
             return
         ensure_directory(self.output_dir)
@@ -44,6 +82,11 @@ class VideoPipeline:
         write_json(state_path, asdict(self.state))
 
     def load_state(self, state_path: Path) -> None:
+        """Load state from a project.json file.
+
+        Args:
+            state_path: Path to the state file
+        """
         if not state_path.exists():
             return
         try:
@@ -55,6 +98,14 @@ class VideoPipeline:
             self.state = None
 
     def create_state(self, config: VideoConfig) -> ProjectState:
+        """Create a new project state.
+
+        Args:
+            config: Video configuration
+
+        Returns:
+            New ProjectState instance
+        """
         self.state = ProjectState(
             config=config,
             created_at=datetime.now().isoformat(),
@@ -73,6 +124,16 @@ class VideoPipeline:
         output_dir: Path,
         resume: bool = True,
     ) -> tuple[VideoConfig, Path]:
+        """Initialize the pipeline with configuration.
+
+        Args:
+            config: Video configuration
+            output_dir: Output directory
+            resume: Whether to attempt resuming a previous session
+
+        Returns:
+            Tuple of (config, output_dir)
+        """
         self.output_dir = output_dir
         ensure_directory(output_dir)
 
@@ -89,6 +150,11 @@ class VideoPipeline:
         return config, output_dir
 
     def get_progress(self) -> tuple[float, str]:
+        """Get current progress.
+
+        Returns:
+            Tuple of (progress as float 0-1, status message)
+        """
         if self.state is None:
             return 0.0, "Not started"
 
@@ -104,6 +170,15 @@ class VideoPipeline:
         return progress / 100, message
 
 def find_resume_project(output_dir: Path, title: str) -> Optional[Path]:
+    """Find a resumable project by title.
+
+    Args:
+        output_dir: Directory to search for projects
+        title: Project title to match
+
+    Returns:
+        Path to project directory if found, None otherwise
+    """
     if not output_dir.exists():
         return None
 
