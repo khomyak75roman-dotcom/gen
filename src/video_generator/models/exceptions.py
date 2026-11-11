@@ -10,7 +10,7 @@ class TTSError(VideoGenerationError):
     """Error during text-to-speech conversion."""
     pass
 
-class BackgroundGenerationError(VideoGenerationError):
+class BackgroundError(VideoGenerationError):
     """Error during background generation."""
     pass
 
