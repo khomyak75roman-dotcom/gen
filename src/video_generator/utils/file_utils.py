@@ -2,10 +2,11 @@
 File utility functions.
 """
 
+import json
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Any, List, Optional, Union
 
 import requests
 
@@ -25,17 +26,6 @@ def download_file(
 ) -> Path:
     """
     Download a file from URL with progress tracking.
-
-    Args:
-        url: URL to download from
-        destination: Destination path
-        timeout: Request timeout in seconds
-        headers: Optional HTTP headers
-        chunk_size: Chunk size for streaming
-        progress_callback: Optional callback(downloaded_bytes, total_bytes)
-
-    Returns:
-        Path to downloaded file
     """
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -92,3 +82,10 @@ def list_files(
     if recursive:
         return list(directory.rglob(pattern))
     return list(directory.glob(pattern))
+
+def write_json(path: Union[str, Path], data: Any, indent: int = 2) -> None:
+    """Write data as JSON to a file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=indent, ensure_ascii=False)
